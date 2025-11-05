@@ -1,0 +1,16 @@
+courses_homogeneity : {'Arithmancy': 422.2752541030716, 'Astronomy': 491.8915648927711, 'Herbology': 4.875334160958966, 'Defense Against the Dark Arts': 4.928227214873102, 'Divination': 4.237167259305303, 'Muggle Studies': 425.2936778832357, 'Ancient Runes': 98.18297293485669, 'History of Magic': 4.234819631278532, 'Transfiguration': 43.07726450415598, 'Potions': 2.4195875627218255, 'Care of Magical Creatures': 0.054923032840995395, 'Charms': 8.273143490841983, 'Flying': 97.26895952539108}
+
+=== Classement des cours par homogénéité (plus petit = plus homogène) ===
+ 1. Care of Magical Creatures : 0.054923 🏆 PLUS HOMOGÈNE
+ 2. Potions                   : 2.419588 
+ 3. History of Magic          : 4.234820 
+ 4. Divination                : 4.237167 
+ 5. Herbology                 : 4.875334 
+ 6. Defense Against the Dark Arts : 4.928227 
+ 7. Charms                    : 8.273143 
+ 8. Transfiguration           : 43.077265 
+ 9. Flying                    : 97.268960 
+10. Ancient Runes             : 98.182973 
+11. Arithmancy                : 422.275254 
+12. Muggle Studies            : 425.293678 
+13. Astronomy                 : 491.891565 
