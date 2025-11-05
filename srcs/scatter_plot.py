@@ -31,7 +31,7 @@ def scatter_plot():
 						print(f"Correlation between {course1} and {course2}: {correlation:.4f}")
 						
 						# Garder la paire avec la plus forte corrélation POSITIVE
-						if correlation > max_correlation:
+						if abs(correlation) > abs(max_correlation):
 							max_correlation = correlation
 							best_pair = (i, j, course1, course2, clean_data1, clean_data2)
 		
