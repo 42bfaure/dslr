@@ -934,6 +934,68 @@ def exp(x: float, precision: int = 50) -> float:
 		print(f"Erreur lors du calcul de l'exponentielle: {e}")
 		return None
 
+def ln(x: float, precision: int = 50) -> float:
+	"""
+	Calcule le logarithme naturel ln(x) en utilisant la série de Taylor.
+	
+	Args:
+		x: Valeur à logarithmiser (doit être > 0)
+		precision: Nombre de termes de la série (plus = plus précis)
+	
+	Returns:
+		ln(x) ou None en cas d'erreur
+	"""
+	try:
+		if x <= 0:
+			raise ValueError("x doit être strictement positif pour ln(x)")
+		if x == 1.0:
+			return 0.0
+		
+		# Utiliser la série de Taylor pour ln(1+u) où u = x-1
+		# ln(1+u) = u - u²/2 + u³/3 - u⁴/4 + ...
+		# Cette série converge seulement pour |u| < 1, donc |x-1| < 1, donc 0 < x < 2
+		
+		# Si x >= 2, utiliser ln(x) = ln(2) + ln(x/2)
+		if x >= 2.0:
+			ln2 = 0.6931471805599453  # ln(2) précalculé
+			# Diviser x par 2 jusqu'à ce qu'il soit < 2
+			div_count = 0
+			temp_x = x
+			while temp_x >= 2.0:
+				temp_x /= 2.0
+				div_count += 1
+			return div_count * ln2 + _ln_small(temp_x, precision)
+		
+		# Si x < 0.5, utiliser ln(x) = -ln(1/x)
+		if x < 0.5:
+			return -_ln_small(1.0 / x, precision)
+		
+		# Sinon, utiliser directement la série
+		return _ln_small(x, precision)
+		
+	except Exception as e:
+		print(f"Erreur lors du calcul de ln: {e}")
+		return None
+
+def _ln_small(x: float, precision: int = 50) -> float:
+	"""Helper pour calculer ln(x) quand x est proche de 1 (0.5 < x < 2)"""
+	u = x - 1.0
+	result = 0.0
+	sign = 1
+	u_power = u
+	
+	for n in range(1, precision):
+		term = sign * u_power / n
+		result += term
+		
+		if abs(term) < 1e-15:
+			break
+		
+		u_power *= u
+		sign *= -1
+	
+	return result
+
 def sigmoid(value: float) -> float:
 	"""
 	Calcule la sigmoïde d'une valeur.
@@ -1023,3 +1085,225 @@ def find_gap(homogeneity: dict[str, float]) -> float:
 	threshold = homogeneity_values[gap_index]
 	
 	return threshold
+
+def compute_correlation_matrix(column_names: List[str], column_data: List[List], 
+							   exclude_columns: Optional[List[str]] = None) -> Optional[dict[str, dict[str, float]]]:
+	"""
+	Calcule la matrice de corrélation entre toutes les paires de colonnes.
+	
+	Args:
+		column_names: Liste des noms de colonnes
+		column_data: Liste de listes (une liste par colonne)
+		exclude_columns: Liste des colonnes à exclure du calcul
+	
+	Returns:
+		Dictionnaire {col1: {col2: corr, ...}, ...} ou None en cas d'erreur
+	"""
+	try:
+		if exclude_columns is None:
+			exclude_columns = []
+		
+		# Filtrer les colonnes
+		filtered_indices = []
+		filtered_names = []
+		for i, name in enumerate(column_names):
+			if name not in exclude_columns and i < len(column_data):
+				filtered_indices.append(i)
+				filtered_names.append(name)
+		
+		correlation_matrix = {}
+		
+		for i, name1 in enumerate(filtered_names):
+			correlation_matrix[name1] = {}
+			idx1 = filtered_indices[i]
+			
+			for j, name2 in enumerate(filtered_names):
+				idx2 = filtered_indices[j]
+				
+				# Filtrer les données pour enlever les None
+				clean_data1 = []
+				clean_data2 = []
+				for k in range(len(column_data[idx1])):
+					if k < len(column_data[idx2]) and column_data[idx1][k] is not None and column_data[idx2][k] is not None:
+						clean_data1.append(column_data[idx1][k])
+						clean_data2.append(column_data[idx2][k])
+				
+				if len(clean_data1) > 1:
+					corr = correlation_coefficient(clean_data1, clean_data2)
+					correlation_matrix[name1][name2] = corr if corr is not None else 0.0
+				else:
+					correlation_matrix[name1][name2] = 0.0
+		
+		return correlation_matrix
+		
+	except Exception as e:
+		print(f"Erreur lors du calcul de la matrice de corrélation: {e}")
+		return None
+
+def select_least_correlated_features(column_names: List[str], column_data: List[List],
+									 max_correlation: float = 0.8,
+									 exclude_columns: Optional[List[str]] = None) -> Optional[List[str]]:
+	"""
+	Sélectionne les features les moins corrélées entre elles.
+	
+	Stratégie: Si deux colonnes ont une corrélation absolue > max_correlation, on garde seulement
+	la première dans l'ordre. Les corrélations négatives fortes sont aussi considérées comme
+	problématiques (multicollinéarité) car elles indiquent une relation linéaire inversée.
+	
+	Args:
+		column_names: Liste des noms de colonnes
+		column_data: Liste de listes (une liste par colonne)
+		max_correlation: Seuil de corrélation absolue maximum autorisé (0.0 à 1.0)
+		                 Exemple: 0.7 signifie que si |corr| > 0.7, on exclut une des deux features
+		exclude_columns: Liste des colonnes à exclure (ex: "Index", "Hogwarts House")
+	
+	Returns:
+		Liste des noms de colonnes sélectionnées (moins corrélées)
+	"""
+	try:
+		if exclude_columns is None:
+			exclude_columns = []
+		
+		# Calculer la matrice de corrélation
+		corr_matrix = compute_correlation_matrix(column_names, column_data, exclude_columns)
+		if corr_matrix is None:
+			return None
+		
+		# Filtrer les colonnes à considérer
+		candidate_names = [name for name in column_names if name not in exclude_columns]
+		
+		selected_features = []
+		removed_features = []
+		
+		for i, name1 in enumerate(candidate_names):
+			if name1 not in corr_matrix:
+				continue
+			
+			# Vérifier si cette feature est trop corrélée avec une feature déjà sélectionnée
+			should_add = True
+			for name2 in selected_features:
+				if name2 in corr_matrix and name1 in corr_matrix[name2]:
+					actual_corr = corr_matrix[name2][name1]
+					abs_corr = abs(actual_corr)
+					if abs_corr > max_correlation:
+						should_add = False
+						removed_features.append((name1, name2, actual_corr))  # Stocker la vraie corrélation
+						break
+			
+			if should_add:
+				selected_features.append(name1)
+		
+		return selected_features
+		
+	except Exception as e:
+		print(f"Erreur lors de la sélection des features: {e}")
+		return None
+
+def print_correlation_matrix(column_names: List[str], column_data: List[List],
+							  exclude_columns: Optional[List[str]] = None,
+							  show_all: bool = False) -> bool:
+	"""
+	Affiche la matrice de corrélation de manière lisible.
+	
+	Args:
+		column_names: Liste des noms de colonnes
+		column_data: Liste de listes (une liste par colonne)
+		exclude_columns: Liste des colonnes à exclure
+		show_all: Si True, affiche toutes les corrélations, sinon seulement les fortes
+	
+	Returns:
+		True si succès, False sinon
+	"""
+	try:
+		corr_matrix = compute_correlation_matrix(column_names, column_data, exclude_columns)
+		if corr_matrix is None:
+			return False
+		
+		names = sorted(corr_matrix.keys())
+		
+		print("\n" + "="*80)
+		print("MATRICE DE CORRÉLATION")
+		print("="*80)
+		
+		if show_all:
+			# Afficher toutes les corrélations
+			print(f"\n{'':<20}", end="")
+			for name in names:
+				print(f"{name[:10]:>10}", end="")
+			print()
+			
+			for name1 in names:
+				print(f"{name1[:20]:<20}", end="")
+				for name2 in names:
+					corr = corr_matrix[name1][name2] if name2 in corr_matrix[name1] else 0.0
+					print(f"{corr:>10.3f}", end="")
+				print()
+		else:
+			# Afficher seulement les corrélations fortes (> 0.5 ou < -0.5)
+			print("\n🔴 Corrélations fortes (|r| > 0.5):")
+			print(f"{'Feature 1':<30} {'Feature 2':<30} {'Corrélation':<15}")
+			print("-"*75)
+			
+			strong_corrs = []
+			for i, name1 in enumerate(names):
+				for j, name2 in enumerate(names):
+					if i < j:  # Éviter les doublons
+						corr = corr_matrix[name1][name2] if name2 in corr_matrix[name1] else 0.0
+						if corr is not None and abs(corr) > 0.5:
+							strong_corrs.append((name1, name2, corr))
+			
+			# Trier par valeur absolue de corrélation
+			strong_corrs.sort(key=lambda x: abs(x[2]), reverse=True)
+			
+			for name1, name2, corr in strong_corrs:
+				indicator = "🔴" if abs(corr) > 0.8 else "🟡"
+				print(f"{indicator} {name1:<28} {name2:<28} {corr:>10.4f}")
+			
+			# Afficher un résumé des corrélations maximales par feature
+			print("\n📊 Résumé des corrélations maximales par feature (valeur absolue):")
+			print("   Note: Une corrélation négative forte = corrélation forte inversée, pas une absence de corrélation")
+			print(f"{'Feature':<30} {'|Corrélation| max':<20} {'Corrélation':<15} {'Avec':<30}")
+			print("-"*95)
+			
+			feature_max_corr = []
+			for name1 in names:
+				max_abs_corr = 0.0
+				max_corr = 0.0
+				max_corr_with = None
+				for name2 in names:
+					if name1 != name2:
+						corr = corr_matrix[name1][name2] if name2 in corr_matrix[name1] else 0.0
+						if corr is not None and abs(corr) > abs(max_abs_corr):
+							max_abs_corr = abs(corr)
+							max_corr = corr
+							max_corr_with = name2
+				
+				feature_max_corr.append((name1, max_abs_corr, max_corr, max_corr_with))
+			
+			# Trier par valeur absolue de corrélation maximale (croissant = moins corrélé)
+			feature_max_corr.sort(key=lambda x: x[1])  # x[1] est la valeur absolue
+			
+			for name, max_abs_corr, max_corr, with_name in feature_max_corr:
+				if max_abs_corr < 0.3:
+					indicator = "✅"  # Peu corrélée = bonne feature (indépendante)
+				elif max_abs_corr < 0.5:
+					indicator = "🟢"  # Corrélation modérée
+				elif max_abs_corr < 0.7:
+					indicator = "🟡"  # Corrélation forte
+				else:
+					indicator = "🔴"  # Très forte corrélation (multicollinéarité)
+				
+				# Afficher le signe de la corrélation pour comprendre la relation
+				sign = "+" if max_corr >= 0 else "-"
+				
+				if with_name:
+					print(f"{indicator} {name:<28} {max_abs_corr:>10.4f}      {sign}{max_abs_corr:>10.4f}      {with_name:<30}")
+				else:
+					print(f"{indicator} {name:<28} {max_abs_corr:>10.4f}      {sign}{max_abs_corr:>10.4f}      {'N/A':<30}")
+		
+		print("="*80 + "\n")
+		return True
+		
+	except Exception as e:
+		print(f"Erreur lors de l'affichage de la matrice: {e}")
+		return False
