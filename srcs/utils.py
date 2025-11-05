@@ -1307,3 +1307,15 @@ def print_correlation_matrix(column_names: List[str], column_data: List[List],
 	except Exception as e:
 		print(f"Erreur lors de l'affichage de la matrice: {e}")
 		return False
+
+def calculate_cost_function(theta: List[float], selected_features_data: dict[str, dict[str, List[float]]], features_names: List[str]) -> float:
+	"""
+	Calcule la fonction de coût (cost function) pour la régression logistique.
+	
+	Args:
+		theta: Liste des paramètres theta
+		selected_features_data: Dictionnaire des données filtrées
+		features_names: Liste des noms des features sélectionnées
+	"""
+	
+	return 0.0

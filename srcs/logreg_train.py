@@ -52,12 +52,68 @@ def logreg_train():
 		print(f"\n📈 Homogénéité après gap (avec features sélectionnées):")
 		print(f"{homogeneity_after_gap}")
 		print(f"selected_features : {selected_features}")
+		selected_features_data = get_selected_features_data(houses_scores, courses_names)
 		
+		theta = logistic_regression(selected_features_data, courses_names)
+		print(f"theta : {theta}")
 	except (Exception) as e:
 		print(f"Error: {e}")
 		return False
 	return True
 
+def get_selected_features_data(houses_scores: dict[str, dict[str, List[float]]], selected_features: List[str]) -> dict[str, dict[str, List[float]]]:
+	"""
+	Retourne les données des features sélectionnées.
+	
+	Args:
+		houses_scores: Dictionnaire des scores par maison et par cours
+		               Structure: {maison: {cours: [valeurs]}}
+		selected_features: Liste des features sélectionnées (noms des cours)
+	
+	Returns:
+		Dictionnaire avec la même structure mais filtré pour les features sélectionnées
+		Structure: {maison: {cours: [valeurs]}}
+		Exemple: {
+			"Gryffindor": {
+				"Arithmancy": [10, 8, 12, ...],
+				"Astronomy": [15, 14, 16, ...]
+			},
+			"Hufflepuff": {
+				"Arithmancy": [9, 7, 11, ...],
+				"Astronomy": [13, 12, 14, ...]
+			}
+		}
+	"""
+	return {
+		house: {
+			feature: houses_scores[house][feature] 
+			for feature in selected_features 
+			if feature in houses_scores[house]
+		}
+		for house in houses_scores
+	}
+
+def logistic_regression(selected_features_data: dict[str, dict[str, List[float]]], features_names: List[str]) -> List[float]:
+	"""
+	Effectue une régression logistique pour prédire la maison d'un étudiant.
+	
+	Args:
+		selected_features_data: Dictionnaire des données filtrées
+		                        Structure: {maison: {cours: [valeurs]}}
+		features_names: Liste des noms des features sélectionnées
+	
+	Returns:
+		Liste des paramètres theta après entraînement
+	"""
+	theta = [0.0] * (len(features_names) + 1)  # +1 pour le biais
+	print(f"theta initialisé : {theta}")
+	learning_rate = 0.01
+	max_epochs = 10000
+	convergence_threshold = 1e-6
+	patience = 50
+
+	
+	return theta
 
 
 if __name__ == "__main__":
