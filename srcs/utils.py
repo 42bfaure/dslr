@@ -1308,14 +1308,50 @@ def print_correlation_matrix(column_names: List[str], column_data: List[List],
 		print(f"Erreur lors de l'affichage de la matrice: {e}")
 		return False
 
-def calculate_cost_function(theta: List[float], selected_features_data: dict[str, dict[str, List[float]]], features_names: List[str]) -> float:
+def calculate_cost_function(theta: List[float], X: List[List[float]], y: List[int], m: int, features_names: List[str], predictions: List[float]) -> float:
 	"""
 	Calcule la fonction de coût (cost function) pour la régression logistique.
+	
+	Args:
+		theta: Liste des paramètres theta
+		X: Liste de listes, chaque ligne = features d'un étudiant
+		y: Liste de labels (0, 1, 2, 3 pour les 4 maisons)
+		m: Nombre total d'étudiants
+		features_names: Liste des noms des features sélectionnées
+	"""
+	cost = 0.0
+	for i in range(m):
+		cost += -y[i] * ln(predictions[i]) - (1 - y[i]) * ln(1 - predictions[i])
+	return cost / m
+
+def calculate_gradient(theta: List[float], X: List[List[float]], y: List[int], m: int, features_names: List[str]) -> List[float]:
+	"""
+	Calcule le gradient pour la régression logistique.
 	
 	Args:
 		theta: Liste des paramètres theta
 		selected_features_data: Dictionnaire des données filtrées
 		features_names: Liste des noms des features sélectionnées
 	"""
+	return [0.0] * len(theta)
+
+def calculate_prediction(theta: List[float], X: List[List[float]], m: int, features_names: List[str]) -> List[float]:
+	"""
+	Calcule la prédiction pour la régression logistique.
 	
-	return 0.0
+	Args:
+		theta: Liste des paramètres theta
+		X: Liste de listes, chaque ligne = features d'un étudiant
+		y: Liste de labels (0, 1, 2, 3 pour les 4 maisons)
+		m: Nombre total d'étudiants
+		features_names: Liste des noms des features sélectionnées
+		m: Nombre total d'étudiants
+	"""
+	predictions = []
+	for i in range(m):
+		z = theta[0] * 1
+		for j in range(len(features_names)):
+			z += theta[j+1] * X[i][j]
+		predictions.append(sigmoid(z))
+	return predictions
+	

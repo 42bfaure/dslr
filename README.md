@@ -432,6 +432,10 @@ Le sous-apprentissage se produit quand le modèle est trop simple et ne capture 
 - **z** : Combinaison linéaire = θᵀ · x
 - **J(θ)** : Fonction de coût (cost function)
 - **m** : Nombre d'exemples dans le dataset d'entraînement
+  - Exemple : Si vous avez 1000 étudiants dans votre dataset, m = 1000
+  - Dans les boucles : `for i in range(m)` signifie "pour chaque exemple"
+  - ⚠️ **IMPORTANT** : m est le nombre TOTAL d'étudiants, pas le nombre par cours ou par maison !
+  - Chaque étudiant a plusieurs features (cours) mais compte comme 1 seul exemple
 - **n** : Nombre de features (caractéristiques)
 - **α (alpha)** : Learning rate (taux d'apprentissage)
 - **λ (lambda)** : Paramètre de régularisation (optionnel)
@@ -687,7 +691,12 @@ POUR CHAQUE EPOCH :
 
 ```python
 # 1. INITIALISATION (une fois)
-theta = [0.0] * (n_features + 1)
+# m = nombre d'exemples dans le dataset d'entraînement
+# Exemple : si vous avez 1000 étudiants, m = 1000
+# n_features = nombre de features (cours) sélectionnés
+# Exemple : si vous avez sélectionné 3 cours, n_features = 3
+
+theta = [0.0] * (n_features + 1)  # +1 pour le biais (θ₀)
 best_cost = float('inf')
 no_improvement = 0
 previous_cost = float('inf')
@@ -696,8 +705,9 @@ previous_cost = float('inf')
 for epoch in range(max_epochs):
     
     # 2.1. CALCULER LES PRÉDICTIONS (h_θ(x))
+    # Pour chaque exemple dans le dataset (m exemples au total)
     predictions = []
-    for i in range(m):
+    for i in range(m):  # i va de 0 à m-1 (ex: 0, 1, 2, ..., 999 si m=1000)
         z = theta[0] * 1  # x₀ = 1 (biais)
         for j in range(n_features):
             z += theta[j+1] * x[i][j]
@@ -980,6 +990,78 @@ python3 srcs/pair_plot.py data/dataset_train.csv
 
 ## 🔑 Points importants pour DSLR
 
+### ⚠️ Structure des données : m = nombre TOTAL d'étudiants
+
+**IMPORTANT** : Pour la régression logistique, vous avez besoin de :
+
+1. **X** : Liste de listes, chaque ligne = un étudiant avec ses features
+   ```python
+   X = [
+       [10, 8, 15, ...],  # Étudiant 1 : notes dans tous les cours
+       [12, 9, 16, ...],  # Étudiant 2 : notes dans tous les cours
+       [5, 3, 8, ...],    # Étudiant 3 : notes dans tous les cours
+       ...
+   ]
+   ```
+
+2. **y** : Liste de labels, chaque élément = la maison de l'étudiant correspondant
+   ```python
+   y = [0, 0, 1, 2, 3, 0, ...]  # 0=Gryffindor, 1=Hufflepuff, 2=Ravenclaw, 3=Slytherin
+   ```
+
+3. **m** : Nombre total d'étudiants
+   ```python
+   m = len(X)  # Exemple : si vous avez 1000 étudiants, m = 1000
+   ```
+
+**Exemple concret :**
+- Si votre dataset a 1000 étudiants → **m = 1000**
+- Chaque étudiant a 3 cours sélectionnés → **n_features = 3**
+- X a 1000 lignes (une par étudiant)
+- y a 1000 valeurs (une par étudiant)
+- **m n'est PAS** le nombre de notes par cours, c'est le nombre d'étudiants !
+
+### Transformation des données
+
+Votre structure actuelle `houses_scores` est organisée par maison et par cours :
+```python
+houses_scores = {
+    "Gryffindor": {
+        "Arithmancy": [10, 8, 12, ...],  # Toutes les notes d'Arithmancy pour Gryffindor
+        "Astronomy": [15, 14, 16, ...]
+    },
+    "Hufflepuff": {
+        "Arithmancy": [9, 7, 11, ...],
+        "Astronomy": [13, 12, 14, ...]
+    },
+    ...
+}
+```
+
+**Il faut transformer cela en X et y :**
+
+```python
+# Pour chaque étudiant dans le dataset original :
+# - Récupérer toutes ses notes (features)
+# - Récupérer sa maison (label)
+# - Ajouter à X et y
+
+X = []  # Liste de listes
+y = []  # Liste de labels
+
+for i in range(nb_rows):  # Pour chaque ligne du CSV
+    house = data[houses_index][i]
+    features = []
+    for course in courses_names:
+        score = data[course_index][i]
+        features.append(score)
+    
+    X.append(features)  # Ajouter les features de cet étudiant
+    y.append(house_to_label[house])  # Ajouter le label de cet étudiant
+
+m = len(X)  # Nombre total d'étudiants
+```
+
 ### Sélection de features
 
 Le projet sélectionne automatiquement les features les moins corrélées pour éviter la multicollinéarité :
@@ -1001,24 +1083,6 @@ Le projet calcule l'homogénéité des cours pour identifier ceux qui discrimine
 ```python
 homogeneity = utils.calculate_homogeneity(houses_scores)
 homogeneity_after_gap = utils.return_homogeneity_after_gap(homogeneity)
-```
-
-### Structure des données
-
-Les données sont organisées en dictionnaire imbriqué :
-
-```python
-houses_scores = {
-    "Gryffindor": {
-        "Arithmancy": [10, 8, 12, ...],
-        "Astronomy": [15, 14, 16, ...]
-    },
-    "Hufflepuff": {
-        "Arithmancy": [9, 7, 11, ...],
-        "Astronomy": [13, 12, 14, ...]
-    },
-    ...
-}
 ```
 
 ---

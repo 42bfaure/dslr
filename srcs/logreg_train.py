@@ -52,66 +52,127 @@ def logreg_train():
 		print(f"\n📈 Homogénéité après gap (avec features sélectionnées):")
 		print(f"{homogeneity_after_gap}")
 		print(f"selected_features : {selected_features}")
-		selected_features_data = get_selected_features_data(houses_scores, courses_names)
 		
-		theta = logistic_regression(selected_features_data, courses_names)
+		# Préparer les données pour l'entraînement
+		# X = liste de listes : chaque ligne = un étudiant avec ses features
+		# y = liste de labels : chaque élément = la maison de l'étudiant correspondant
+		# m = nombre total d'étudiants
+		X, y, m = prepare_training_data(header, data, courses_names)
+		print(f"\n📊 Données préparées :")
+		print(f"  - Nombre d'étudiants (m) : {m}")
+		print(f"  - Nombre de features : {len(courses_names)}")
+		print(f"  - Exemple X[0] (premier étudiant) : {X[0] if len(X) > 0 else 'N/A'}")
+		print(f"  - Exemple y[0] (maison du premier étudiant) : {y[0] if len(y) > 0 else 'N/A'}")
+		
+		# Entraîner le modèle de régression logistique
+		theta = logistic_regression(X, y, m, len(courses_names))
 		print(f"theta : {theta}")
 	except (Exception) as e:
 		print(f"Error: {e}")
 		return False
 	return True
 
-def get_selected_features_data(houses_scores: dict[str, dict[str, List[float]]], selected_features: List[str]) -> dict[str, dict[str, List[float]]]:
+def prepare_training_data(header: List[str], data: List[List], features_names: List[str]) -> Tuple[List[List[float]], List[int], int]:
 	"""
-	Retourne les données des features sélectionnées.
+	Prépare les données pour l'entraînement en format X (features) et y (labels).
 	
 	Args:
-		houses_scores: Dictionnaire des scores par maison et par cours
-		               Structure: {maison: {cours: [valeurs]}}
-		selected_features: Liste des features sélectionnées (noms des cours)
+		header: En-têtes du CSV
+		data: Données brutes (List[List])
+		features_names: Liste des noms des features sélectionnées
 	
 	Returns:
-		Dictionnaire avec la même structure mais filtré pour les features sélectionnées
-		Structure: {maison: {cours: [valeurs]}}
-		Exemple: {
-			"Gryffindor": {
-				"Arithmancy": [10, 8, 12, ...],
-				"Astronomy": [15, 14, 16, ...]
-			},
-			"Hufflepuff": {
-				"Arithmancy": [9, 7, 11, ...],
-				"Astronomy": [13, 12, 14, ...]
-			}
-		}
+		Tuple (X, y, m) où:
+		- X: Liste de listes, chaque ligne = features d'un étudiant
+		- y: Liste de labels (0, 1, 2, 3 pour les 4 maisons)
+		- m: Nombre total d'étudiants
 	"""
-	return {
-		house: {
-			feature: houses_scores[house][feature] 
-			for feature in selected_features 
-			if feature in houses_scores[house]
-		}
-		for house in houses_scores
-	}
+	houses_index = header.index("Hogwarts House")
+	houses = sorted({h for h in data[houses_index] if h is not None})
+	house_to_label = {house: idx for idx, house in enumerate(houses)}
+	
+	features_indices = {name: header.index(name) for name in features_names}
+	
+	X = []
+	y = []
+	
+	nb_rows = len(data[houses_index])
+	for i in range(nb_rows):
+		house = data[houses_index][i]
+		if house is None:
+			continue
+		
+		# Récupérer les features de cet étudiant
+		features = []
+		has_all_features = True
+		for feature_name in features_names:
+			feature_idx = features_indices[feature_name]
+			value = data[feature_idx][i]
+			if value is None:
+				has_all_features = False
+				break
+			features.append(value)
+		
+		# Si toutes les features sont présentes, ajouter cet étudiant
+		if has_all_features:
+			X.append(features)
+			y.append(house_to_label[house])
+	
+	m = len(X)  # Nombre total d'étudiants
+	return X, y, m
 
-def logistic_regression(selected_features_data: dict[str, dict[str, List[float]]], features_names: List[str]) -> List[float]:
+def logistic_regression(X: List[List[float]], y: List[int], m: int, n_features: int) -> List[float]:
 	"""
 	Effectue une régression logistique pour prédire la maison d'un étudiant.
 	
 	Args:
-		selected_features_data: Dictionnaire des données filtrées
-		                        Structure: {maison: {cours: [valeurs]}}
-		features_names: Liste des noms des features sélectionnées
+		X: Liste de listes, chaque ligne = features d'un étudiant
+		   Exemple : [[10, 8, 15], [12, 9, 16], ...]
+		   - X[i] = features de l'étudiant i
+		   - X[i][j] = note du cours j pour l'étudiant i
+		y: Liste de labels (0, 1, 2, 3 pour les 4 maisons)
+		   Exemple : [0, 0, 1, 2, 3, 0, ...]
+		   - y[i] = maison de l'étudiant i
+		m: Nombre total d'étudiants (m = len(X) = len(y))
+		n_features: Nombre de features (cours) sélectionnés
 	
 	Returns:
 		Liste des paramètres theta après entraînement
+		Structure : [θ₀ (bias), θ₁, θ₂, ..., θₙ]
+		- theta[0] = θ₀ (biais)
+		- theta[j+1] = θⱼ (poids du cours j)
 	"""
-	theta = [0.0] * (len(features_names) + 1)  # +1 pour le biais
-	print(f"theta initialisé : {theta}")
+	# Initialisation
+	theta = [0.0] * (n_features + 1)  # +1 pour le biais (θ₀)
 	learning_rate = 0.01
 	max_epochs = 10000
 	convergence_threshold = 1e-6
 	patience = 50
-
+	
+	best_cost = float('inf')
+	best_theta = None
+	no_improvement = 0
+	previous_cost = float('inf')
+	
+	print(f"\n🚀 Démarrage de l'entraînement :")
+	print(f"  - Paramètres initiaux : {theta}")
+	print(f"  - Learning rate : {learning_rate}")
+	print(f"  - Max epochs : {max_epochs}")
+	print(f"  - Patience : {patience}")
+	
+	# Boucle d'entraînement
+	for epoch in range(max_epochs):
+		# TODO: Implémenter ici les étapes de l'entraînement
+		# 1. Calculer les prédictions h_θ(x) pour tous les exemples
+		# 2. Calculer le coût J(θ)
+		# 3. Vérifier convergence et patience
+		# 4. Calculer le gradient ∂J/∂θⱼ
+		# 5. Mettre à jour theta : θⱼ = θⱼ - α × gradient
+		
+		# Placeholder pour l'instant
+		if epoch == 0:
+			print(f"\n⚠️  Entraînement non implémenté - TODO à compléter")
+			break
 	
 	return theta
 
