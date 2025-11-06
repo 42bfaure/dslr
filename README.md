@@ -25,12 +25,37 @@ Implémenter une régression logistique **from scratch** (sans bibliothèques ML
 
 ### Classification binaire vs multiclasse
 
-- **Classification binaire** : Prédire si un étudiant est dans "Gryffindor" (y=1) ou non (y=0)
-- **Classification multiclasse** : Prédire parmi 4 maisons (One-vs-All)
-  - Modèle 1 : Gryffindor vs (tous les autres)
-  - Modèle 2 : Hufflepuff vs (tous les autres)
-  - Modèle 3 : Ravenclaw vs (tous les autres)
-  - Modèle 4 : Slytherin vs (tous les autres)
+#### ⚠️ IMPORTANT : La régression logistique est TOUJOURS binaire
+
+**La régression logistique de base ne peut prédire que 2 classes : 0 ou 1.**
+
+Toutes les formules du README (fonction de coût, gradient, etc.) supposent que **y ∈ {0, 1}**.
+
+#### Pour 4 maisons : One-vs-All (4 modèles binaires)
+
+Pour classifier 4 maisons, on entraîne **4 modèles binaires séparés** :
+
+- **Modèle 0 (Gryffindor)** : "Est-ce Gryffindor ?" → y_binary = 1 si y == 0, sinon y_binary = 0
+- **Modèle 1 (Hufflepuff)** : "Est-ce Hufflepuff ?" → y_binary = 1 si y == 1, sinon y_binary = 0
+- **Modèle 2 (Ravenclaw)** : "Est-ce Ravenclaw ?" → y_binary = 1 si y == 2, sinon y_binary = 0
+- **Modèle 3 (Slytherin)** : "Est-ce Slytherin ?" → y_binary = 1 si y == 3, sinon y_binary = 0
+
+**Chaque modèle utilise y_binary (0 ou 1), pas y multiclasse (0, 1, 2, 3) !**
+
+#### Exemple concret
+
+```python
+# Données originales (multiclasse)
+y = [0, 0, 1, 2, 3, 0]  # 0=Gryffindor, 1=Hufflepuff, 2=Ravenclaw, 3=Slytherin
+
+# Pour le modèle Gryffindor (house_idx = 0)
+y_binary = [1, 1, 0, 0, 0, 1]  # 1 si Gryffindor, 0 sinon
+
+# Pour le modèle Hufflepuff (house_idx = 1)
+y_binary = [0, 0, 1, 0, 0, 0]  # 1 si Hufflepuff, 0 sinon
+```
+
+**Toutes les formules du README utilisent y_binary (0 ou 1), pas y multiclasse !**
 
 ### Différence avec la régression linéaire
 
@@ -186,7 +211,9 @@ J(θ) = -1/m × Σ[i=1 à m] [yᵢ × log(h_θ(xᵢ)) + (1-yᵢ) × log(1-h_θ(x
 Où :
 - **J(θ)** = fonction de coût (cost function)
 - **m** = nombre d'exemples d'entraînement
-- **yᵢ** = label réel (0 ou 1) pour l'exemple i
+- **yᵢ** = label réel **BINAIRE** (0 ou 1) pour l'exemple i
+  - ⚠️ **IMPORTANT** : Cette formule fonctionne UNIQUEMENT avec y ∈ {0, 1}
+  - Pour One-vs-All, on utilise y_binary (0 ou 1), pas y multiclasse (0, 1, 2, 3)
 - **h_θ(xᵢ)** = probabilité prédite pour l'exemple i
 - **log** = logarithme naturel (ln, base e)
 
@@ -715,12 +742,13 @@ for epoch in range(max_epochs):
         predictions.append(h)
     
     # 2.2. CALCULER LE COÛT (J(θ))
+    # ⚠️ IMPORTANT : y_binary doit être 0 ou 1 (pas y multiclasse 0,1,2,3)
     cost = 0.0
     for i in range(m):
         h = max(1e-15, min(1 - 1e-15, predictions[i]))  # Clipper pour éviter log(0)
-        if y[i] == 1:
+        if y_binary[i] == 1:  # ⚠️ Utiliser y_binary, pas y multiclasse !
             cost += ln(h)
-        else:
+        else:  # y_binary[i] == 0
             cost += ln(1.0 - h)
     cost = -(1.0 / m) * cost
     
@@ -742,11 +770,12 @@ for epoch in range(max_epochs):
             break
     
     # 2.5. CALCULER LE GRADIENT (∂J/∂θⱼ)
+    # ⚠️ IMPORTANT : y_binary doit être 0 ou 1 (pas y multiclasse 0,1,2,3)
     gradient = [0.0] * len(theta)
     for j in range(len(theta)):
         sum_error = 0.0
         for i in range(m):
-            error = predictions[i] - y[i]
+            error = predictions[i] - y_binary[i]  # ⚠️ Utiliser y_binary, pas y multiclasse !
             x_ij = 1.0 if j == 0 else x[i][j-1]  # x₀=1 pour le biais
             sum_error += error * x_ij
         gradient[j] = (1.0 / m) * sum_error
@@ -1091,13 +1120,51 @@ homogeneity_after_gap = utils.return_homogeneity_after_gap(homogeneity)
 
 ### Régression logistique multiclasse (One-vs-All)
 
-Pour classifier plusieurs classes (ex: 4 maisons de Poudlard), on entraîne un modèle par classe :
-- Modèle 1 : Gryffindor vs (tous les autres)
-- Modèle 2 : Hufflepuff vs (tous les autres)
-- Modèle 3 : Ravenclaw vs (tous les autres)
-- Modèle 4 : Slytherin vs (tous les autres)
+#### ⚠️ Pourquoi One-vs-All ?
 
-Pour prédire, on choisit la classe avec la probabilité la plus élevée.
+**La régression logistique est binaire par nature** (y ∈ {0, 1}). Pour classifier 4 maisons, on entraîne **4 modèles binaires séparés** :
+
+- **Modèle 0** : Gryffindor vs (tous les autres)
+- **Modèle 1** : Hufflepuff vs (tous les autres)
+- **Modèle 2** : Ravenclaw vs (tous les autres)
+- **Modèle 3** : Slytherin vs (tous les autres)
+
+#### Conversion y multiclasse → y_binary
+
+Pour chaque modèle, on convertit y multiclasse (0, 1, 2, 3) en y_binary (0 ou 1) :
+
+```python
+# Données originales
+y = [0, 0, 1, 2, 3, 0]  # 0=Gryffindor, 1=Hufflepuff, 2=Ravenclaw, 3=Slytherin
+
+# Pour le modèle Gryffindor (house_idx = 0)
+y_binary = [1 if y[i] == 0 else 0 for i in range(m)]
+# Résultat : [1, 1, 0, 0, 0, 1]
+
+# Pour le modèle Hufflepuff (house_idx = 1)
+y_binary = [1 if y[i] == 1 else 0 for i in range(m)]
+# Résultat : [0, 0, 1, 0, 0, 0]
+```
+
+#### Structure du code
+
+```python
+# Entraîner 4 modèles séparés
+all_thetas = []
+houses = ["Gryffindor", "Hufflepuff", "Ravenclaw", "Slytherin"]
+
+for house_idx, house_name in enumerate(houses):
+    # Convertir y en binaire pour ce modèle
+    y_binary = [1 if y[i] == house_idx else 0 for i in range(m)]
+    
+    # Entraîner le modèle binaire (utilise y_binary, pas y !)
+    theta = logistic_regression_binary(X, y_binary, m, n_features)
+    all_thetas.append(theta)
+```
+
+#### Prédiction
+
+Pour prédire, on calcule la probabilité avec chaque modèle et on choisit la classe avec la probabilité la plus élevée.
 
 ### Régularisation
 

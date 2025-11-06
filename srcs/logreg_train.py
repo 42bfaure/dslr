@@ -102,7 +102,6 @@ def prepare_training_data(header: List[str], data: List[List], features_names: L
 		if house is None:
 			continue
 		
-		# Récupérer les features de cet étudiant
 		features = []
 		has_all_features = True
 		for feature_name in features_names:
@@ -113,12 +112,11 @@ def prepare_training_data(header: List[str], data: List[List], features_names: L
 				break
 			features.append(value)
 		
-		# Si toutes les features sont présentes, ajouter cet étudiant
 		if has_all_features:
 			X.append(features)
 			y.append(house_to_label[house])
 	
-	m = len(X)  # Nombre total d'étudiants
+	m = len(X)
 	return X, y, m
 
 def logistic_regression(X: List[List[float]], y: List[int], m: int, n_features: int) -> List[float]:
