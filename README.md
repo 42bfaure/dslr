@@ -57,6 +57,214 @@ y_binary = [0, 0, 1, 0, 0, 0]  # 1 si Hufflepuff, 0 sinon
 
 **Toutes les formules du README utilisent y_binary (0 ou 1), pas y multiclasse !**
 
+---
+
+### 🔍 Utilisation de y_binary dans le calcul du coût - EXPLICATION DÉTAILLÉE
+
+#### Le problème
+
+La formule de la fonction de coût **ne fonctionne QUE avec y ∈ {0, 1}** :
+
+```python
+J(θ) = -1/m × Σ[yᵢ × log(h) + (1-yᵢ) × log(1-h)]
+```
+
+Mais vous avez **4 maisons** : `y = [0, 1, 2, 3, 0, 1, ...]`
+
+#### La solution : Conversion y → y_binary pour chaque modèle
+
+**Pour CHAQUE modèle**, on convertit y multiclasse en y_binary :
+
+```python
+# Données originales
+X = [[10, 8], [12, 9], [5, 3], [7, 6], [14, 11]]  # 5 étudiants
+y = [0, 0, 1, 2, 3]  # 0=Gryffindor, 1=Hufflepuff, 2=Ravenclaw, 3=Slytherin
+m = 5
+
+# ========== MODÈLE GRYFFINDOR (house_idx = 0) ==========
+# Question : "Est-ce Gryffindor ?" → OUI (1) ou NON (0)
+y_binary_gryff = [1, 1, 0, 0, 0]
+#                 ↑  ↑  ↑  ↑  ↑
+#                 G  G  H  R  S
+#               OUI OUI NON NON NON
+
+# ========== MODÈLE HUFFLEPUFF (house_idx = 1) ==========
+# Question : "Est-ce Hufflepuff ?" → OUI (1) ou NON (0)
+y_binary_huff = [0, 0, 1, 0, 0]
+#                ↑  ↑  ↑  ↑  ↑
+#                G  G  H  R  S
+#              NON NON OUI NON NON
+
+# ========== MODÈLE RAVENCLAW (house_idx = 2) ==========
+y_binary_raven = [0, 0, 0, 1, 0]
+
+# ========== MODÈLE SLYTHERIN (house_idx = 3) ==========
+y_binary_slyth = [0, 0, 0, 0, 1]
+```
+
+#### Où et comment y_binary est utilisé dans le calcul du coût
+
+```python
+def logistic_regression_binary(X, y_binary, m, n_features):
+	"""
+	Entraîne UN SEUL modèle binaire (appelé 4 fois pour 4 maisons).
+	
+	Args:
+		X: Features (IDENTIQUE pour tous les modèles)
+		y_binary: Labels binaires (DIFFÉRENT pour chaque modèle)
+		m: Nombre d'étudiants
+		n_features: Nombre de features
+	"""
+	
+	theta = [0.0] * (n_features + 1)
+	learning_rate = 0.01
+	
+	for epoch in range(max_epochs):
+		
+		# 1. CALCULER LES PRÉDICTIONS
+		predictions = []
+		for i in range(m):
+			z = theta[0] * 1  # Biais
+			for j in range(n_features):
+				z += theta[j+1] * X[i][j]
+			h = sigmoid(z)
+			predictions.append(h)
+		
+		# 2. CALCULER LE COÛT ← ICI ON UTILISE y_binary !
+		cost = 0.0
+		for i in range(m):
+			h = predictions[i]
+			
+			# ⚠️ IMPORTANT : On utilise y_binary[i], PAS y[i] !
+			if y_binary[i] == 1:  # Si c'est la bonne maison (OUI)
+				cost += ln(h)
+			else:  # Si ce n'est pas la bonne maison (NON)
+				cost += ln(1.0 - h)
+		
+		cost = -(1.0 / m) * cost
+		
+		# 3. CALCULER LE GRADIENT ← ICI AUSSI !
+		gradient = [0.0] * len(theta)
+		for j in range(len(theta)):
+			sum_error = 0.0
+			for i in range(m):
+				# ⚠️ IMPORTANT : On utilise y_binary[i], PAS y[i] !
+				error = predictions[i] - y_binary[i]
+				x_ij = 1.0 if j == 0 else X[i][j-1]
+				sum_error += error * x_ij
+			gradient[j] = (1.0 / m) * sum_error
+		
+		# 4. METTRE À JOUR THETA
+		for j in range(len(theta)):
+			theta[j] = theta[j] - learning_rate * gradient[j]
+	
+	return theta
+```
+
+#### Exemple concret étape par étape pour le modèle Gryffindor
+
+```python
+# Données
+X = [[10, 8], [12, 9], [5, 3], [7, 6], [14, 11]]
+y = [0, 0, 1, 2, 3]  # Multiclasse original
+m = 5
+
+# CONVERSION pour le modèle Gryffindor
+y_binary = [1, 1, 0, 0, 0]
+#           ↑  ↑  ↑  ↑  ↑
+#         Gryff Gryff Huff Raven Slyth
+
+# EPOCH 0 : theta = [0, 0, 0]
+predictions = [0.5, 0.5, 0.5, 0.5, 0.5]  # sigmoid(0) = 0.5
+
+# CALCUL DU COÛT
+cost = 0.0
+
+# Étudiant 0 : y_binary[0] = 1 (Gryffindor), h = 0.5
+cost += ln(0.5)  # ≈ -0.693
+
+# Étudiant 1 : y_binary[1] = 1 (Gryffindor), h = 0.5
+cost += ln(0.5)  # ≈ -0.693
+
+# Étudiant 2 : y_binary[2] = 0 (Hufflepuff, pas Gryffindor), h = 0.5
+cost += ln(1.0 - 0.5)  # ln(0.5) ≈ -0.693
+
+# Étudiant 3 : y_binary[3] = 0 (Ravenclaw, pas Gryffindor), h = 0.5
+cost += ln(1.0 - 0.5)  # ln(0.5) ≈ -0.693
+
+# Étudiant 4 : y_binary[4] = 0 (Slytherin, pas Gryffindor), h = 0.5
+cost += ln(1.0 - 0.5)  # ln(0.5) ≈ -0.693
+
+# Total
+cost = -(1.0 / 5) * (-0.693 - 0.693 - 0.693 - 0.693 - 0.693)
+cost = -(1.0 / 5) * (-3.465)
+cost ≈ 0.693
+
+# CALCUL DU GRADIENT
+# Pour θ₀ (biais)
+gradient[0] = (1/5) × [(0.5-1)×1 + (0.5-1)×1 + (0.5-0)×1 + (0.5-0)×1 + (0.5-0)×1]
+            = (1/5) × [-0.5 - 0.5 + 0.5 + 0.5 + 0.5]
+            = 0.1
+
+# MISE À JOUR
+theta[0] = 0 - 0.01 × 0.1 = -0.001
+# ... et ainsi de suite pour θ₁, θ₂
+```
+
+#### Détails de la formule
+
+Dans la formule du coût, selon y_binary :
+
+```python
+# Forme complète
+cost += y_binary[i] × ln(h) + (1 - y_binary[i]) × ln(1 - h)
+
+# Si y_binary[i] = 1 (c'est la bonne maison) :
+cost += 1 × ln(h) + 0 × ln(1-h)
+cost += ln(h)  # Pénalise si h est faible (mauvaise prédiction)
+
+# Si y_binary[i] = 0 (ce n'est PAS la bonne maison) :
+cost += 0 × ln(h) + 1 × ln(1-h)
+cost += ln(1-h)  # Pénalise si h est élevé (mauvaise prédiction)
+```
+
+#### Entraîner les 4 modèles
+
+```python
+def train_one_vs_all(X, y, m, n_features):
+	"""Entraîne 4 modèles binaires (One-vs-All)"""
+	
+	all_thetas = []
+	
+	for house_idx in range(4):  # 0, 1, 2, 3
+		# CONVERSION : y multiclasse → y_binary
+		y_binary = [1 if y[i] == house_idx else 0 for i in range(m)]
+		
+		# Entraîner CE modèle avec y_binary
+		theta = logistic_regression_binary(X, y_binary, m, n_features)
+		all_thetas.append(theta)
+	
+	return all_thetas  # 4 vecteurs theta (un par maison)
+```
+
+#### Points clés à retenir
+
+1. **Chaque modèle a son propre y_binary** :
+   - Modèle Gryffindor : `[1, 1, 0, 0, 0]`
+   - Modèle Hufflepuff : `[0, 0, 1, 0, 0]`
+   - etc.
+
+2. **Tous les modèles utilisent le même X** (features identiques)
+
+3. **y_binary est TOUJOURS 0 ou 1** (jamais 2 ou 3)
+
+4. **Chaque modèle répond à SA question binaire** :
+   - "Est-ce Gryffindor ?" → y_binary spécifique
+   - "Est-ce Hufflepuff ?" → y_binary différent
+   - etc.
+
+5. **Dans la fonction de coût et le gradient, on utilise TOUJOURS y_binary, jamais y multiclasse**
+
 ### Différence avec la régression linéaire
 
 - **Régression linéaire** : Sortie continue (ex: prix = 1000 + 50×taille)

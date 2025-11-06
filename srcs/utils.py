@@ -1324,6 +1324,15 @@ def calculate_cost_function(theta: List[float], X: List[List[float]], y: List[in
 		cost += -y[i] * ln(predictions[i]) - (1 - y[i]) * ln(1 - predictions[i])
 	return cost / m
 
+def transform_ybinary(y: List[int]) -> List[int]:
+	"""
+	Transforme les labels en binary.
+	
+	Args:
+		y: Liste de labels (0, 1, 2, 3 pour les 4 maisons)
+	"""
+	return [1 if y[i] == 0 else 0 for i in range(len(y))]
+
 def calculate_gradient(theta: List[float], X: List[List[float]], y: List[int], m: int, features_names: List[str]) -> List[float]:
 	"""
 	Calcule le gradient pour la régression logistique.
