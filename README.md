@@ -1438,6 +1438,10 @@ Cette fonction orchestre tout le pipeline “data prep”.
 	- **`X`**: liste de lignes, 1 ligne = 1 étudiant, colonnes = notes des cours choisis
 	- **`y`**: label multiclasse (0..3) correspondant à la maison
 	- **`m`**: nombre d’exemples gardés
+- **Pourquoi “par étudiant” et pas “par maison/cours”**
+	- L’entraînement d’une régression logistique (et les formules coût/gradient) suppose des exemples \(x^{(i)}\) complets: un **vecteur de features** pour un individu.
+	- Si tu regroupes “maison → cours → liste de notes”, tu perds l’alignement “ces notes appartiennent au **même étudiant**”, donc tu ne peux plus former des vecteurs \(x = [\text{Astronomy}, \text{Potions}, ...]\) cohérents.
+	- Le format “par maison” est utile pour l’analyse/visualisation (comparer des distributions), mais pas pour entraîner un modèle multi-features.
 - **Détails importants**
 	- construit `house_to_label` en triant les maisons (`sorted(...)`), puis en les numérotant.
 	- construit `features_indices` pour accéder vite aux colonnes des cours.

@@ -448,13 +448,13 @@ def save_model_params(params: List[Union[int, float]], path: str) -> bool:
 		True si succès, False sinon
 	"""
 	try:
-		if not all(isinstance(p, (int, float)) for p in params):
-			raise TypeError("Tous les paramètres doivent être des nombres")
+		# if not all(isinstance(p, (int, float)) for p in params):
+		# 	raise TypeError("Tous les paramètres doivent être des nombres")
 		if not isinstance(path, str):
 			raise TypeError("Le chemin doit être une chaîne de caractères")
 		
-		with open(path, "w") as f:
-			f.write(" ".join(map(str, params)))
+		with open(path, "a") as f:
+			f.write(" ".join(map(str, params)) + "\n")
 		return True
 	except Exception as e:
 		print(f"Erreur lors de la sauvegarde: {e}")
@@ -608,6 +608,50 @@ def standardize(data: List[Union[int, float]]) -> Optional[Tuple[List[float], fl
 		print(f"Erreur lors de la standardisation: {e}")
 		return None
 
+def standardize_matrix(X: List[List[Union[int, float]]]) -> Optional[Tuple[List[List[float]], List[Tuple[float, float]]]]:
+	"""
+	Standardise une matrice X colonne par colonne (moyenne=0, écart-type=1).
+
+	Args:
+		X: Matrice m×n (List[List]) où chaque ligne est un exemple et chaque colonne une feature.
+				m: nombre d'exemples
+				n: nombre de features
+	Returns:
+		Tuple (X_std, params) ou None en cas d'erreur, où:
+		- X_std: matrice standardisée m×n
+		- params: liste de (mean, std) pour chaque colonne (à réutiliser sur le test)
+	"""
+	try:
+		if X is None or len(X) == 0:
+			raise ValueError("X ne peut pas être vide")
+		if len(X[0]) == 0:
+			raise ValueError("X doit avoir au moins une feature")
+
+		m = len(X)
+		n = len(X[0])
+
+		for i in range(m):
+			if len(X[i]) != n:
+				raise ValueError("Toutes les lignes de X doivent avoir la même longueur")
+
+		X_std: List[List[float]] = [[0.0 for _ in range(n)] for _ in range(m)]
+		params: List[Tuple[float, float]] = []
+
+		for j in range(n):
+			col = [float(X[i][j]) for i in range(m)]
+			result = standardize(col)
+			if result is None:
+				return None
+			col_std, col_mean, col_stddev = result
+			params.append((col_mean, col_stddev))
+			for i in range(m):
+				X_std[i][j] = col_std[i]
+
+		return X_std, params
+	except Exception as e:
+		print(f"Erreur lors de la standardisation de la matrice: {e}")
+		return None
+
 def plot_scatter(x_data: List[Union[int, float]], y_data: List[Union[int, float]], 
 				 output_path: str, x_label: str = "X", y_label: str = "Y", 
 				 title: str = "Nuage de points", regression_line: Optional[Tuple[float, float]] = None,
@@ -630,6 +674,8 @@ def plot_scatter(x_data: List[Union[int, float]], y_data: List[Union[int, float]
 		True si succès, False sinon
 	"""
 	try:
+		if plt is None:
+			raise ModuleNotFoundError("matplotlib n'est pas installé (plot_scatter indisponible)")
 		plt.figure(figsize=figsize)
 		plt.scatter(x_data, y_data, color='blue', alpha=0.6, label='Données', s=50)
 
@@ -968,7 +1014,10 @@ def ln(x: float, precision: int = 50) -> float:
 		
 		# Si x < 0.5, utiliser ln(x) = -ln(1/x)
 		if x < 0.5:
-			return -_ln_small(1.0 / x, precision)
+			# Ne pas appeler _ln_small directement ici: 1/x peut être >> 2
+			# et la série de Taylor autour de 1 diverge. On repasse par ln()
+			# pour appliquer la réduction (divisions par 2) avant _ln_small.
+			return -ln(1.0 / x, precision)
 		
 		# Sinon, utiliser directement la série
 		return _ln_small(x, precision)
@@ -1324,14 +1373,14 @@ def calculate_cost_function(theta: List[float], X: List[List[float]], y: List[in
 		cost += -y[i] * ln(predictions[i]) - (1 - y[i]) * ln(1 - predictions[i])
 	return cost / m
 
-def transform_ybinary(y: List[int]) -> List[int]:
+def transform_ybinary(y: List[int], k: int) -> List[int]:
 	"""
 	Transforme les labels en binary.
 	
 	Args:
 		y: Liste de labels (0, 1, 2, 3 pour les 4 maisons)
 	"""
-	return [1 if y[i] == 0 else 0 for i in range(len(y))]
+	return [1 if y[i] == k else 0 for i in range(len(y))]
 
 def calculate_gradient(theta: List[float], X: List[List[float]], y: List[int], m: int, features_names: List[str]) -> List[float]:
 	"""
