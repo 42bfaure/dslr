@@ -1397,3 +1397,252 @@ Où :
 ---
 
 **Bon courage pour l'implémentation ! 🚀**
+
+---
+
+## 🧠 Comprendre `srcs/logreg_train.py` (explication guidée)
+
+Cette section explique **ce que fait le fichier actuellement**. Important: l’**entraînement est désactivé** pour te permettre de le réimplémenter proprement (one-vs-all).
+
+### Imports
+
+- **`import utils`**: importe `srcs/utils.py` (chargement CSV, sélection de features, maths, corrélations…).
+- **`import sys`**: permet de lire `sys.argv` (argument `dataset_train.csv`).
+- **`from typing ...`**: annotations de types (aide à la lisibilité, pas indispensable à l’exécution).
+
+### `logreg_train()` (la fonction “main”)
+
+Cette fonction orchestre tout le pipeline “data prep”.
+
+- **Vérification des arguments**
+	- attend exactement 1 argument: le chemin vers le dataset.
+- **Chargement du CSV**
+	- `utils.load_csv(..., return_header=True, auto_convert=True)` renvoie:
+		- `header`: noms de colonnes
+		- `data`: valeurs **par colonnes**
+- **Extraction des colonnes numériques**
+	- `utils.extract_numeric_columns(...)` renvoie `numeric_names` / `numeric_data`.
+- **Sélection de features peu corrélées**
+	- `utils.select_least_correlated_features(..., max_correlation=0.7, exclude_columns=["Index", "Hogwarts House"])`
+	- résultat: `selected_features`
+	- ensuite `courses_names` retire “Index” pour ne garder que les cours.
+- **Préparation du dataset d’entraînement**
+	- `X, y, m = prepare_training_data(header, data, courses_names)`
+	- affichage d’un exemple (`X[0]`, `y[0]`) pour vérifier.
+- **Entraînement**
+	- actuellement **désactivé**: le script affiche juste un message et s’arrête.
+
+### `prepare_training_data(header, data, features_names) -> (X, y, m)`
+
+- **But**: convertir le CSV (par colonnes) en format ML standard:
+	- **`X`**: liste de lignes, 1 ligne = 1 étudiant, colonnes = notes des cours choisis
+	- **`y`**: label multiclasse (0..3) correspondant à la maison
+	- **`m`**: nombre d’exemples gardés
+- **Détails importants**
+	- construit `house_to_label` en triant les maisons (`sorted(...)`), puis en les numérotant.
+	- construit `features_indices` pour accéder vite aux colonnes des cours.
+	- parcourt chaque étudiant `i`:
+		- si la maison est `None` → skip
+		- si une feature est `None` → skip la ligne complète (exemple ignoré)
+		- sinon ajoute la ligne dans `X` et le label dans `y`.
+
+### `if __name__ == "__main__":`
+
+- si tu lances `python3 srcs/logreg_train.py ...`, Python appelle `logreg_train()`.
+
+### Ce que tu coderas ensuite (rappel)
+
+- **L’entraînement doit être one-vs-all**:
+	- pour chaque maison `k`:
+		- `y_binary = [1 if yi == k else 0 for yi in y]`
+		- entraîner un modèle binaire → produire un `theta_k`
+	- sauvegarder les 4 `theta_k` pour `logreg_predict`.
+
+---
+
+## 🧰 Comprendre `srcs/utils.py` (explication guidée, par blocs)
+
+`srcs/utils.py` est une “boîte à outils” utilisée par tout le projet: lecture CSV, nettoyage, stats “describe”, corrélations/feature selection, maths (exp/ln/sigmoid), et quelques helpers (encore incomplets) pour la logreg.
+
+Pour rester lisible, on suit l’ordre du fichier **de haut en bas** et on explique ce que fait chaque bloc/fonction.
+
+### 1) Imports
+
+- **`csv`**: lecture/écriture CSV.
+- **`typing`**: annotations de types.
+- **`datetime`**: parsing possible de dates lors de `auto_convert`.
+- **`matplotlib.pyplot as plt`**: utilisé par les fonctions de plots (scatter, etc.).
+
+### 2) Chargement CSV et inférence de types
+
+#### `load_csv(path, columns=None, skip_header=True, convert_type=float, auto_convert=False, parse_dates=True, return_header=False)`
+
+- **But**: lire un CSV et renvoyer les données au format **par colonnes** (transposé).
+- **Points importants**
+	- si `return_header=True`, la fonction lit la 1ère ligne pour construire `header`.
+	- si `skip_header=True` et `return_header=False`, elle saute la 1ère ligne.
+	- si `columns` est fourni, elle filtre lignes + header sur ces indices.
+	- conversion:
+		- `auto_convert=True` → `_auto_convert_value` (int/float/None/date/str)
+		- sinon `convert_type` (par défaut `float`) → conversion simple
+	- à la fin, elle transpose: `zip(*data)` pour obtenir `List[List]` où chaque sous-liste est une colonne.
+
+#### `_auto_convert_value(value, parse_dates=True)`
+
+- **But**: convertir une cellule string en type “le plus probable”.
+- **Règles**
+	- vide / `nan` / `null` / `none` / `n/a` → `None`
+	- sinon tente `int` (avec des heuristiques)
+	- sinon tente `float`
+	- sinon tente `datetime` si `parse_dates=True`
+	- sinon renvoie la string originale
+
+#### `analyze_csv_types(path, sample_size=100)`
+
+- **But**: inspecter un échantillon de lignes et compter les types détectés par `_auto_convert_value`.
+- **Sortie**: pour chaque colonne: `dominant_type`, % de null, 3 exemples bruts, distribution des types.
+
+#### `get_numeric_columns(path, skip_header=True)`
+
+- **But**: retourner `(numeric_names, numeric_indices)` des colonnes dont le type dominant est `int` ou `float`.
+- **Utilisé ensuite** par `extract_numeric_columns`.
+
+#### `extract_numeric_columns(path, data, skip_header=True)`
+
+- **But**: filtrer les données (chargées via `load_csv`) pour ne garder que les colonnes numériques.
+- **Entrée `data`**: peut être soit:
+	- `columns_data` (juste les colonnes)
+	- ou `(header, columns_data)` (si tu as demandé le header)
+- **Sortie**: `(numeric_names, numeric_data)` au format **par colonnes**.
+
+#### `none_filter(data)`
+
+- **But**: enlever les `None` de chaque colonne d’une liste de colonnes.
+- **Attention**: ça casse l’alignement “ligne” entre colonnes (utile pour histogrammes, moins pour corrélations/paires).
+
+### 3) Valeurs manquantes
+
+#### `count_missing_values(path, skip_header=True)`
+
+- **But**: compter, pour chaque colonne, le nombre de cellules vides vs pleines.
+- Reconnaît vides: `''` ou `nan/null/none/n/a` (case-insensitive).
+- **Sortie**: dict avec stats par colonne + globales.
+
+#### `print_missing_values_report(path, skip_header=True, show_all_columns=False)`
+
+- **But**: afficher joliment les résultats de `count_missing_values`.
+
+### 4) Sauvegarde/chargement de “params”
+
+#### `save_model_params(params, path)`
+
+- **But**: écrire une liste de nombres dans un fichier, séparés par des espaces.
+- **Typiquement**: sauvegarder un vecteur `theta`.
+
+#### `load_model_params(path, expected_count=None)`
+
+- **But**: relire le fichier et le convertir en `List[float]`.
+- Si `expected_count` est fourni, vérifie la taille.
+
+### 5) Min/Max/normalisation/standardisation
+
+#### `ft_min`, `ft_max`, `get_min_max`
+
+- **But**: implémenter min/max sans utiliser `min()`/`max()` directement (utile pour rester “from scratch”).
+
+#### `normalize_min_max(data, min_val=None, max_val=None)`
+
+- **But**: normaliser entre 0 et 1: \((x - min) / (max - min)\).
+- Si `max == min`, renvoie `0.5` partout (évite division par 0).
+
+#### `standardize(data)`
+
+- **But**: standardiser: \((x - \mu)/\sigma\).
+- Renvoie `(data_standardized, mean, std)`.
+
+### 6) Fonctions de plot (utilisées par les scripts de visualisation)
+
+#### `plot_scatter(x_data, y_data, output_path, ..., regression_line=None, norm_params=None, figsize=(12, 8))`
+
+- **But**: scatter plot, et optionnellement tracer une droite de régression.
+- Si `norm_params` est fourni, normalise la plage X avant de calculer la droite.
+- Sauvegarde un PNG + `plt.show()`.
+
+#### `calculate_r2`, `calculate_mse`, `calculate_mae`, `linear_prediction`
+
+- **But**: métriques / prédictions associées (surtout utiles pour la partie régression linéaire / plots).
+
+### 7) Statistiques “describe”
+
+#### `count(data)`
+
+- **But**: renvoyer `(nb_colonnes, [len(col) ...])`.
+
+#### `mean`, `std`
+
+- **But**: moyenne et écart-type (population, pas “échantillon”).
+
+#### `median`, `percentile`, `quartiles`
+
+- **But**: quantiles “from scratch” via tri + interpolation linéaire.
+- `quartiles` appelle `percentile(25/50/75)`.
+
+### 8) Corrélations et sélection de features
+
+#### `correlation_coefficient(x, y)`
+
+- **But**: Pearson r = covariance / (std_x * std_y).
+- **Attention**: suppose `x` et `y` alignés et de même longueur.
+
+#### `compute_correlation_matrix(column_names, column_data, exclude_columns=None)`
+
+- **But**: calculer une matrice `dict[name1][name2] = corr`.
+- Filtre les paires en retirant les indices où l’une des deux colonnes vaut `None`.
+
+#### `select_least_correlated_features(column_names, column_data, max_correlation=0.8, exclude_columns=None)`
+
+- **But**: garder une liste de features en évitant d’ajouter une feature trop corrélée à une déjà sélectionnée.
+- Stratégie simple: on parcourt `candidate_names` et on compare à `selected_features` déjà gardées.
+
+#### `print_correlation_matrix(...)`
+
+- **But**: afficher la matrice (complète ou seulement les fortes), avec un résumé.
+
+### 9) Maths “logreg”
+
+#### `exp(x, precision=50)`
+
+- **But**: approx de \(e^x\) via série de Taylor.
+- Protection contre overflow: refuse `x > 700` / `x < -700`.
+
+#### `ln(x, precision=50)` + `_ln_small(x, precision=50)`
+
+- **But**: approx de \(\ln(x)\).
+- Utilise:
+	- réduction si `x >= 2` (divisions par 2 + `ln(2)` précalculé)
+	- transformation si `x < 0.5` (\(\ln(x) = -\ln(1/x)\))
+	- sinon série de Taylor autour de 1 (`_ln_small`)
+
+#### `sigmoid(value)`
+
+- **But**: \(1/(1+e^{-value})\) en utilisant `exp`.
+
+### 10) Homogénéité (analyse)
+
+#### `calculate_homogeneity(scores_by_class)` / `return_homogeneity_after_gap(...)` / `find_gap(...)`
+
+- **But**: calculer une métrique d’homogénéité et sélectionner des cours “au-dessus d’un gap”.
+- Utilisé pour l’analyse (ex: histogrammes), pas requis pour l’entraînement logreg.
+
+### 11) Helpers logreg en bas de fichier (à manier avec prudence)
+
+Ces fonctions existent mais ne sont pas toutes “prêtes”:
+
+- **`calculate_cost_function(...)`**
+	- écrit la log-loss binaire mais prend `y` décrit comme multiclasse (0..3) → **à n’utiliser que avec `y_binary`**, sinon c’est faux.
+- **`transform_ybinary(y)`**
+	- transforme seulement “classe 0 vs reste” (codé en dur) → pour one-vs-all il faut une version `transform_ybinary(y, k)`.
+- **`calculate_gradient(...)`**
+	- retourne actuellement un gradient nul (placeholder).
+- **`calculate_prediction(...)`**
+	- calcule bien `h_theta(x)` (sigmoid du produit \(\theta^T x\) avec biais), utile quand tu recoderas l’entraînement.
