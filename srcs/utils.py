@@ -1,7 +1,9 @@
 import csv
-from typing import Union, List, Tuple, Optional, Any
+import json
+from typing import Union, List, Tuple, Optional, Any, Dict
 from datetime import datetime
 import matplotlib.pyplot as plt
+import os
 
 def load_csv(path: str, columns: Optional[List[int]] = None, skip_header: bool = True, 
 			 convert_type: Optional[type] = float, auto_convert: bool = False, 
@@ -28,7 +30,10 @@ def load_csv(path: str, columns: Optional[List[int]] = None, skip_header: bool =
 		
 		header = None
 		data = []
-		
+
+		if not os.path.exists(path):
+			raise FileNotFoundError(f"Le fichier {path} n'existe pas")
+
 		with open(path, 'r') as file:
 			csv_reader = csv.reader(file)
 			
@@ -460,6 +465,27 @@ def save_model_params(params: List[Union[int, float]], path: str) -> bool:
 		print(f"Erreur lors de la sauvegarde: {e}")
 		return False
 
+def clear_model_params(path: str) -> bool:
+	"""
+	Efface les paramètres d'un modèle depuis un fichier.
+	
+	Args:
+		path: Chemin vers le fichier de paramètres
+	
+	Returns:
+		True si succès, False sinon
+	"""
+	try:
+		if not isinstance(path, str):
+			raise TypeError("Le chemin doit être une chaîne de caractères")
+		
+		with open(path, "w") as f:
+			f.write("")
+		return True
+	except Exception as e:
+		print(f"Erreur lors de l'effacement: {e}")
+		return False
+
 def load_model_params(path: str, expected_count: Optional[int] = None) -> Optional[List[float]]:
 	"""
 	Charge les paramètres d'un modèle depuis un fichier.
@@ -484,6 +510,42 @@ def load_model_params(path: str, expected_count: Optional[int] = None) -> Option
 		return params
 	except Exception as e:
 		print(f"Erreur lors du chargement: {e}")
+		return None
+
+def save_logreg_model_json(
+	path: str,
+	features: List[str],
+	standardization: List[Tuple[float, float]],
+	thetas: List[List[float]],
+	house_labels: List[str],
+) -> bool:
+	"""
+	Sauvegarde un modèle one-vs-all (régression logistique) au format JSON.
+	"""
+	try:
+		payload: Dict[str, Any] = {
+			"version": 1,
+			"features": features,
+			"standardization": [[float(m), float(s)] for m, s in standardization],
+			"thetas": [[float(t) for t in row] for row in thetas],
+			"house_labels": list(house_labels),
+		}
+		with open(path, "w", encoding="utf-8") as f:
+			json.dump(payload, f, indent=2, ensure_ascii=False)
+		return True
+	except Exception as e:
+		print(f"Erreur lors de la sauvegarde JSON du modèle: {e}")
+		return False
+
+def load_logreg_model_json(path: str) -> Optional[Dict[str, Any]]:
+	"""
+	Charge un modèle sauvegardé par save_logreg_model_json.
+	"""
+	try:
+		with open(path, "r", encoding="utf-8") as f:
+			return json.load(f)
+	except Exception as e:
+		print(f"Erreur lors du chargement JSON du modèle: {e}")
 		return None
 
 def ft_min(data: List[Union[int, float]]) -> Optional[float]:
